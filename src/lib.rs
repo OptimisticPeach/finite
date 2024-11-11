@@ -12,8 +12,8 @@ pub trait PolySettings<const SIZE: usize>: Sized {
 }
 
 pub struct FinitePoly<T: PolySettings<SIZE>, const SIZE: usize> {
-    internal: [u64; SIZE],
-    _phantom: PhantomData<T>,
+    pub(crate) internal: [u64; SIZE],
+    pub(crate) _phantom: PhantomData<T>,
 }
 
 impl<T: PolySettings<SIZE>, const SIZE: usize> Eq for FinitePoly<T, SIZE> {}
@@ -679,4 +679,75 @@ const fn poly_num_u64s(logarithm: usize, deg: usize) -> usize {
 
 pub const fn get_size<T: PolySettings<0>>() -> usize {
     poly_num_u64s(log2(T::MODULO), T::DEGREE)
+}
+
+#[allow(unused_macros)]
+macro_rules! make_ring {
+    ($name:ident = $modulo:literal, $degree:literal, [$($coefficients:literal),+]) => {
+        struct Settings;
+
+        impl<const SIZE: usize> $crate::PolySettings<SIZE> for Settings {
+            const DEGREE: usize = $degree;
+            const MODULO: usize = $modulo;
+
+            const OVERFLOW: $crate::FinitePoly<Self, SIZE> =
+                <$crate::FinitePoly<Self, SIZE>>::unchecked_make_from_coeffs_desc(&[$($coefficients),+]);
+        }
+
+        type $name = $crate::FinitePoly<Settings, {$crate::get_size::<Settings>()}>;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    make_ring! {
+        F25 = 5, 5, [1, 4]
+    }
+
+    #[test]
+    fn integer_to_poly() {
+        let one_const = F25::ONE;
+        let one_phi = F25::integer_to_poly(1);
+
+        assert_eq!(one_const, one_phi);
+
+        for i in 0..20 {
+            let pre_reduced = i % 5;
+
+            let value_1 = F25::integer_to_poly(i);
+            let value_2 = F25::integer_to_poly(pre_reduced);
+            let mut value_3 = F25::ZERO;
+
+            for _ in 0..i {
+                value_3 = value_3 + F25::ONE;
+            }
+
+            let mut value_4 = F25::ZERO;
+
+            for _ in 0..pre_reduced {
+                value_4 = value_4 + F25::ONE;
+            }
+
+            assert_eq!(value_1, value_2);
+            assert_eq!(value_2, value_3);
+            assert_eq!(value_3, value_4);
+        }
+    }
+
+    #[test]
+    fn equality() {
+        for lhs in F25::iter() {
+            for rhs in F25::iter() {
+                let mut equal = true;
+                for power in 0..5 {
+                    let coeff_left = lhs.get_nth_coefficient(power) % 5;
+                    let coeff_right = rhs.get_nth_coefficient(power) % 5;
+
+                    equal &= coeff_left == coeff_right;
+                }
+
+                assert_eq!(equal, lhs == rhs);
+            }
+        }
+    }
 }
