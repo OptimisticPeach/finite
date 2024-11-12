@@ -4,156 +4,109 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
-pub trait PolySettings<const SIZE: usize>: Sized {
+use packet::Packet;
+
+mod packet;
+
+pub trait PolySettings<const SIZE: usize, const LOG2: usize>: Sized {
     const DEGREE: usize;
     const MODULO: usize;
 
-    const OVERFLOW: FinitePoly<Self, SIZE>;
+    const OVERFLOW: FinitePoly<Self, SIZE, LOG2>;
 }
 
-pub struct FinitePoly<T: PolySettings<SIZE>, const SIZE: usize> {
-    pub(crate) internal: [u64; SIZE],
+pub struct FinitePoly<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> {
+    pub(crate) internal: [Packet<LOG2>; SIZE],
     pub(crate) _phantom: PhantomData<T>,
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Eq for FinitePoly<T, SIZE> {}
-impl<T: PolySettings<SIZE>, const SIZE: usize> PartialEq for FinitePoly<T, SIZE> {
-    fn eq(&self, other: &Self) -> bool {
-        Self::eq(*self, *other)
-    }
+// impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Eq
+//     for FinitePoly<T, SIZE, LOG2>
+// {
+// }
+
+// impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> PartialEq
+//     for FinitePoly<T, SIZE, LOG2>
+// {
+//     fn eq(&self, other: &Self) -> bool {
+//         Self::eq(*self, *other)
+//     }
+// }
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Copy
+    for FinitePoly<T, SIZE, LOG2>
+{
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Copy for FinitePoly<T, SIZE> {}
-impl<T: PolySettings<SIZE>, const SIZE: usize> Clone for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Clone
+    for FinitePoly<T, SIZE, LOG2>
+{
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePoly<T, SIZE, LOG2> {
     pub const ZERO: Self = Self {
-        internal: [0; SIZE],
+        internal: [Packet::<LOG2>::new(); SIZE],
         _phantom: PhantomData,
     };
 
-    pub const ONE: Self = {
-        let mut one = Self::ZERO;
-        if T::MODULO > 1 {
-            one.internal[0] = 1;
+    const FALSE_ZERO: Packet<LOG2> = Packet::splat(T::MODULO as u64 % (1u64 << LOG2));
+    const OVERFLOW: Packet<LOG2> = Packet::splat((1u64 << LOG2) % T::MODULO as u64);
+
+    pub const ONE: Self = Self::from_int(1);
+
+    const fn splat(value: u64) -> Self {
+        Self {
+            internal: [Packet::splat(value); SIZE],
+            _phantom: PhantomData,
         }
-
-        one
-    };
-
-    pub const LOG2: usize = log2(T::MODULO);
-    pub const LAST_ONE_SELECT: u64 = Self::spread(1 << (Self::LOG2 - 1));
-    pub const ONE_SELECT_POWER: u64 = Self::spread(1);
-    pub const LAST_SELECT: u64 = {
-        let last_shift = Self::POWERS_PER_U64 - 1;
-
-        Self::create_select(last_shift)
-    };
-    pub const LAST_RSH_TO_ONE: usize = (Self::POWERS_PER_U64 - 1) * Self::LOG2;
-    pub const POWERS_PER_U64: usize = u64::BITS as usize / Self::LOG2;
-    pub const EXTRA_POWER_SELECT: u64 = {
-        let powers_in_last = T::DEGREE % Self::POWERS_PER_U64;
-
-        Self::create_select(powers_in_last - 1)
-    };
-    pub const EXTRA_RSH_TO_ONE: usize = (T::DEGREE % Self::POWERS_PER_U64 - 1) * Self::LOG2;
-    pub const SELECT_FIRST: u64 = {
-        let mut val = 0;
-        let mut to_or = 1;
-        let mut done = 0;
-
-        while done < Self::LOG2 {
-            val |= to_or;
-            to_or <<= 1;
-            done += 1;
-        }
-
-        val
-    };
-    pub const SPREAD_MODULO_INTO_EACH: u64 = Self::spread(T::MODULO as u64 % (1 << Self::LOG2));
-    pub const SPREAD_MODULO_OVERFLOW: u64 = {
-        let overflow_power = 1u64 << Self::LOG2;
-        let overflow_modulo = overflow_power % T::MODULO as u64;
-
-        Self::spread(overflow_modulo)
-    };
-    pub const SPREAD_MODULO_UNDERFLOW: u64 = {
-        let neg_underflow = 1u64 << Self::LOG2;
-        let next_mult = ((neg_underflow / T::MODULO as u64) + 1) * T::MODULO as u64;
-        let underflow_modulo = next_mult - neg_underflow;
-
-        Self::spread(underflow_modulo)
-    };
-    const LAST_ITERATOR_ELEM: u128 = (T::MODULO as u128).pow(T::DEGREE as u32);
-    const CLIP_UNUSED_BITS: u64 = Self::spread((1 << Self::LOG2) - 1);
-
-    const fn spread(value: u64) -> u64 {
-        let mut acc = 0;
-        let mut done = 0;
-
-        while done < Self::POWERS_PER_U64 {
-            acc <<= Self::LOG2;
-            acc |= value;
-            done += 1;
-        }
-
-        acc
-    }
-    const fn create_select(index: usize) -> u64 {
-        Self::SELECT_FIRST << (index * Self::LOG2)
     }
 
-    const fn shift_left_1_modulo(n: u64) -> (u64, u64) {
-        let to_knock_off = n & Self::LAST_ONE_SELECT;
-        let shifted = (n ^ to_knock_off) << 1;
-        (shifted, to_knock_off)
+    const fn from_int(value: u64) -> Self {
+        let mut me = Self::ZERO;
+        me.internal[0] = Packet::from_int(value);
+
+        me
     }
 
-    const fn nonzero(n: u64) -> u64 {
-        let mut acc = 0;
-        let mut picker = Self::ONE_SELECT_POWER;
-
+    pub const fn remove_false_zeros(mut self) -> Self {
         let mut done = 0;
 
-        while done < Self::LOG2 {
-            acc |= picker & n;
-            acc <<= 1;
-            picker <<= 1;
+        while done <= SIZE {
+            let temp = self.internal[done];
+
+            // xor detects any differences w/ false zero.
+            // or reduction accumulates any differences into a single u64.
+            // where there was a difference is now a 1, where there was
+            // not (i.e. it is a false zero) is now a 0.
+            let zeros_detect = temp.xor(Self::FALSE_ZERO).or_reduce();
+
+            // and-ing will remove elements where zeros_detect is 0
+            // which are places where we have a false zero.
+            self.internal[done] = temp.and_u64(zeros_detect);
 
             done += 1;
         }
 
-        acc
+        self
     }
 
-    const fn zero_detect(n: u64) -> u64 {
-        let n_is_literal_zero = Self::nonzero(n);
-        let n_is_modulus = Self::nonzero(n ^ Self::SPREAD_MODULO_INTO_EACH);
+    pub const fn degree(mut self) -> usize {
+        self = self.remove_false_zeros();
 
-        n_is_literal_zero & n_is_modulus
-    }
-
-    const fn is_u64_zero(n: u64) -> bool {
-        Self::zero_detect(n) == 0
-    }
-
-    pub const fn degree(self) -> usize {
         let mut done = 1;
 
         while done <= SIZE {
-            let to_detect = Self::zero_detect(self.internal[SIZE - done]);
+            let to_detect = self.internal[SIZE - done];
             let leading = to_detect.leading_zeros();
             let first_one_idx = 64 - leading;
 
             if first_one_idx != 0 {
-                let degree_within = (first_one_idx as usize - 1) / Self::LOG2;
-                let degree_total = degree_within + (SIZE - done) * Self::POWERS_PER_U64;
+                let degree_total = first_one_idx + (SIZE - done) as u64 * 64;
 
-                return degree_total - 1;
+                return degree_total as usize - 1;
             }
 
             done += 1;
@@ -162,29 +115,18 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> FinitePoly<T, SIZE> {
         0
     }
 
-    pub const fn integer_to_poly(n: u64) -> Self {
-        let n = n % T::MODULO as u64;
-
-        let mut result = [0; SIZE];
-        result[0] = n;
-
-        Self {
-            internal: result,
-            _phantom: PhantomData,
-        }
-    }
-
     pub const fn eq(self, other: Self) -> bool {
         let diff = self.sub(other);
 
         diff.is_zero()
     }
 
-    pub const fn is_zero(self) -> bool {
+    pub const fn is_zero(mut self) -> bool {
+        self = self.remove_false_zeros();
         let mut done = 0;
 
         while done < SIZE {
-            if !Self::is_u64_zero(self.internal[done]) {
+            if self.internal[done].or_reduce() != 0 {
                 return false;
             }
 
@@ -194,38 +136,22 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> FinitePoly<T, SIZE> {
         true
     }
 
-    const fn add_within(n: u64, m: u64, extra: u64) -> u64 {
-        if m == 0 {
-            return n;
-        }
-
-        if n == 0 {
-            return m;
-        }
-
+    const fn add_within(n: Packet<LOG2>, m: Packet<LOG2>) -> Packet<LOG2> {
         let mut result = n;
         let mut carry = m;
-        let mut overflow_carry = extra;
+        let mut overflow_carry = Packet::new();
 
-        while carry != 0 || overflow_carry != 0 {
-            let add = result ^ carry ^ overflow_carry;
+        while !carry.is_zero() || !overflow_carry.is_zero() {
+            let add = result.xor(carry).xor(overflow_carry);
             // new_carry = (result & carry) | (result & overflow_carry) | (carry & overflow_carry).
             // That simplifies to this:
-            let new_carry = (result & (carry | overflow_carry)) | (carry & overflow_carry);
+            let new_carry = result
+                .and(carry.or(overflow_carry))
+                .or(carry.and(overflow_carry));
 
-            let (new_carry, overflow_selector) = Self::shift_left_1_modulo(new_carry);
+            let (bumped, new_carry) = new_carry.left_shift_bump();
 
-            let mut overflow_carry_selector = 0;
-
-            let mut done = 0;
-
-            while done < Self::LOG2 {
-                overflow_carry_selector >>= 1;
-                overflow_carry_selector |= overflow_selector;
-                done += 1;
-            }
-
-            let new_overflow = Self::SPREAD_MODULO_OVERFLOW & overflow_carry_selector;
+            let new_overflow = Self::OVERFLOW.and_u64(bumped);
 
             result = add;
             carry = new_carry;
@@ -235,48 +161,32 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> FinitePoly<T, SIZE> {
         result
     }
 
-    pub const fn add(self, other: Self) -> Self {
-        let mut result = [0; SIZE];
-
+    pub const fn add(mut self, other: Self) -> Self {
         let mut i = 0;
         while i < SIZE {
-            result[i] = Self::add_within(self.internal[i], other.internal[i], 0);
+            self.internal[i] = Self::add_within(self.internal[i], other.internal[i]);
             i += 1;
         }
 
-        Self {
-            internal: result,
-            _phantom: PhantomData,
-        }
+        self
     }
 
-    pub const fn sub_within(n: u64, m: u64, extra: u64) -> u64 {
-        if m == 0 {
-            return n;
-        }
-
+    pub const fn sub_within(n: Packet<LOG2>, m: Packet<LOG2>) -> Packet<LOG2> {
         let mut result = n;
         let mut carry = m;
-        let mut underflow_carry = extra;
+        let mut underflow_carry = Packet::new();
 
-        while carry != 0 || underflow_carry != 0 {
-            let sub = result ^ carry ^ underflow_carry;
+        while !carry.is_zero() || !underflow_carry.is_zero() {
+            let sub = result.xor(carry).xor(underflow_carry);
 
-            let new_carry = !result & (carry | underflow_carry) | (carry & underflow_carry);
+            let new_carry = result
+                .not()
+                .and(carry.or(underflow_carry))
+                .or(carry.and(underflow_carry));
 
-            let (new_carry, underflow_selector) = Self::shift_left_1_modulo(new_carry);
+            let (bumped, new_carry) = new_carry.left_shift_bump();
 
-            let mut underflow_carry_selector = 0;
-
-            let mut done = 0;
-
-            while done < Self::LOG2 {
-                underflow_carry_selector >>= 1;
-                underflow_carry_selector |= underflow_selector;
-                done += 1;
-            }
-
-            let new_underflow = Self::SPREAD_MODULO_OVERFLOW & underflow_carry_selector;
+            let new_underflow = Self::OVERFLOW.and_u64(bumped);
 
             result = sub;
             carry = new_carry;
@@ -286,19 +196,14 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> FinitePoly<T, SIZE> {
         result
     }
 
-    pub const fn sub(self, other: Self) -> Self {
-        let mut result = [0; SIZE];
-
+    pub const fn sub(mut self, other: Self) -> Self {
         let mut i = 0;
         while i < SIZE {
-            result[i] = Self::sub_within(self.internal[i], other.internal[i], 0);
+            self.internal[i] = Self::sub_within(self.internal[i], other.internal[i]);
             i += 1;
         }
 
-        Self {
-            internal: result,
-            _phantom: PhantomData,
-        }
+        self
     }
 
     pub const fn mul_modulo(self, by: u64) -> Self {
