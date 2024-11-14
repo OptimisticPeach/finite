@@ -10,7 +10,7 @@ mod packet;
 
 pub trait PolySettings<const SIZE: usize, const LOG2: usize>: Sized {
     const DEGREE: usize;
-    const MODULO: usize;
+    const MODULO: u64;
 
     const OVERFLOW: FinitePoly<Self, SIZE, LOG2>;
 }
@@ -20,18 +20,18 @@ pub struct FinitePoly<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2
     pub(crate) _phantom: PhantomData<T>,
 }
 
-// impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Eq
-//     for FinitePoly<T, SIZE, LOG2>
-// {
-// }
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Eq
+    for FinitePoly<T, SIZE, LOG2>
+{
+}
 
-// impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> PartialEq
-//     for FinitePoly<T, SIZE, LOG2>
-// {
-//     fn eq(&self, other: &Self) -> bool {
-//         Self::eq(*self, *other)
-//     }
-// }
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> PartialEq
+    for FinitePoly<T, SIZE, LOG2>
+{
+    fn eq(&self, other: &Self) -> bool {
+        Self::eq(*self, *other)
+    }
+}
 
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Copy
     for FinitePoly<T, SIZE, LOG2>
@@ -54,19 +54,21 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
 
     const FALSE_ZERO: Packet<LOG2> = Packet::splat(T::MODULO as u64 % (1u64 << LOG2));
     const OVERFLOW: Packet<LOG2> = Packet::splat((1u64 << LOG2) % T::MODULO as u64);
+    const DEGREE_OVERFLOW_BIT: usize = T::DEGREE - 1 - Self::DEGREE_OVERFLOW_U64 * 64;
+    const DEGREE_OVERFLOW_U64: usize = (T::DEGREE - 1) / 64;
 
     pub const ONE: Self = Self::from_int(1);
 
-    const fn splat(value: u64) -> Self {
+    pub const fn splat(value: u64) -> Self {
         Self {
             internal: [Packet::splat(value); SIZE],
             _phantom: PhantomData,
         }
     }
 
-    const fn from_int(value: u64) -> Self {
+    pub const fn from_int(value: u64) -> Self {
         let mut me = Self::ZERO;
-        me.internal[0] = Packet::from_int(value);
+        me.internal[0] = Packet::from_int(value % T::MODULO);
 
         me
     }
@@ -74,7 +76,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     pub const fn remove_false_zeros(mut self) -> Self {
         let mut done = 0;
 
-        while done <= SIZE {
+        while done < SIZE {
             let temp = self.internal[done];
 
             // xor detects any differences w/ false zero.
@@ -125,12 +127,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         self = self.remove_false_zeros();
         let mut done = 0;
 
-        while done < SIZE {
+        while done < SIZE - 1 {
             if self.internal[done].or_reduce() != 0 {
                 return false;
             }
 
             done += 1;
+        }
+
+        if self.internal[SIZE - 1].or_reduce() << (64 - T::DEGREE % 64) != 0 {
+            return false;
         }
 
         true
@@ -149,7 +155,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
                 .and(carry.or(overflow_carry))
                 .or(carry.and(overflow_carry));
 
-            let (bumped, new_carry) = new_carry.left_shift_bump();
+            let (bumped, new_carry) = new_carry.left_shift_horizontal();
 
             let new_overflow = Self::OVERFLOW.and_u64(bumped);
 
@@ -171,7 +177,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         self
     }
 
-    pub const fn sub_within(n: Packet<LOG2>, m: Packet<LOG2>) -> Packet<LOG2> {
+    const fn sub_within(n: Packet<LOG2>, m: Packet<LOG2>) -> Packet<LOG2> {
         let mut result = n;
         let mut carry = m;
         let mut underflow_carry = Packet::new();
@@ -184,7 +190,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
                 .and(carry.or(underflow_carry))
                 .or(carry.and(underflow_carry));
 
-            let (bumped, new_carry) = new_carry.left_shift_bump();
+            let (bumped, new_carry) = new_carry.left_shift_horizontal();
 
             let new_underflow = Self::OVERFLOW.and_u64(bumped);
 
@@ -225,50 +231,30 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     }
 
     pub const fn mul_x(mut self) -> Self {
-        let mut extracted_overflow = self.internal[SIZE - 1] & Self::EXTRA_POWER_SELECT;
+        let extracted_overflow =
+            self.internal[Self::DEGREE_OVERFLOW_U64].extract_coefficient(Self::DEGREE_OVERFLOW_BIT);
 
-        self.internal[SIZE - 1] ^= extracted_overflow;
+        let overflow = T::OVERFLOW.mul_modulo(extracted_overflow);
 
-        extracted_overflow >>= Self::EXTRA_RSH_TO_ONE;
+        self = self.unchecked_mulx(1);
 
-        let shifted = self.unchecked_mulx(1);
-
-        let multiplied_overflow = T::OVERFLOW.mul_modulo(extracted_overflow);
-        shifted.add(multiplied_overflow)
+        self.add(overflow)
     }
 
-    pub const fn unchecked_mulx(self, num: usize) -> Self {
-        if num == 0 {
-            return self;
-        }
-
-        let mut result = [0; SIZE];
-
-        let mut last_select = 0;
+    pub const fn unchecked_mulx(mut self, power: usize) -> Self {
         let mut done = 0;
-        let to_shift = Self::LAST_RSH_TO_ONE - (num - 1) * Self::LOG2;
 
-        while done < num {
-            last_select >>= Self::LOG2;
-            last_select |= Self::LAST_SELECT;
+        let mut carry = Packet::new();
 
+        while done != SIZE {
+            let new_carry = self.internal[done].rsh(64 - power);
+            self.internal[done] = self.internal[done].lsh(power).or(carry);
+
+            carry = new_carry;
             done += 1;
         }
 
-        let mut i = 0;
-        let mut carry = 0;
-
-        while i < SIZE {
-            let new_carry = (last_select & self.internal[i]) >> to_shift;
-            result[i] = ((self.internal[i] << (Self::LOG2 * num)) & Self::CLIP_UNUSED_BITS) | carry;
-            carry = new_carry;
-            i += 1;
-        }
-
-        Self {
-            internal: result,
-            _phantom: PhantomData,
-        }
+        self
     }
 
     pub const fn get_nth_coefficient(self, coeff: usize) -> u64 {
@@ -276,12 +262,10 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
             return 0;
         }
 
-        let idx = coeff / Self::POWERS_PER_U64;
-        let in_idx = coeff % Self::POWERS_PER_U64;
+        let u64_idx = coeff / 64;
+        let within_u64_idx = coeff % 64;
 
-        let containing = self.internal[idx];
-        let shifted = containing >> in_idx * Self::LOG2;
-        shifted & Self::SELECT_FIRST
+        self.internal[u64_idx].extract_coefficient(within_u64_idx)
     }
 
     pub fn mul(self, other: Self) -> Self {
@@ -310,126 +294,146 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         acc
     }
 
-    const fn invert_in_modulo(n: u64) -> Option<u64> {
-        let mut t = 0i64;
-        let mut r = T::MODULO as u64;
-        let mut new_t = 1i64;
-        let mut new_r = n;
+    // const fn invert_in_modulo(n: u64) -> Option<u64> {
+    //     let mut t = 0i64;
+    //     let mut r = T::MODULO as u64;
+    //     let mut new_t = 1i64;
+    //     let mut new_r = n;
 
-        while new_r != 0 {
-            let quotient = r / new_r;
-            (t, new_t) = (new_t, t - quotient as i64 * new_t);
-            (r, new_r) = (new_r, r - quotient * new_r);
-        }
+    //     while new_r != 0 {
+    //         let quotient = r / new_r;
+    //         (t, new_t) = (new_t, t - quotient as i64 * new_t);
+    //         (r, new_r) = (new_r, r - quotient * new_r);
+    //     }
 
-        if r > 1 {
-            return None;
-        }
+    //     if r > 1 {
+    //         return None;
+    //     }
 
-        if t < 0 {
-            t += T::MODULO as i64;
-        }
+    //     if t < 0 {
+    //         t += T::MODULO as i64;
+    //     }
 
-        Some(t as _)
-    }
+    //     Some(t as _)
+    // }
 
     /// Returns: (gcd, n/gcd, m/gcd).
-    const fn extended_euclidean_algo(n: u64, m: u64) -> (u64, u64, u64) {
-        let mut old_r = n as i64;
-        let mut old_s = 1;
-        let mut old_t = 0;
-        let mut r = m as i64;
-        let mut s = 0;
-        let mut t = 1;
+    // const fn extended_euclidean_algo(n: u64, m: u64) -> (u64, u64, u64) {
+    //     let mut old_r = n as i64;
+    //     let mut old_s = 1;
+    //     let mut old_t = 0;
+    //     let mut r = m as i64;
+    //     let mut s = 0;
+    //     let mut t = 1;
 
-        while r != 0 {
-            let q = old_r / r;
-            (old_r, r) = (r, old_r - q * r);
-            (old_s, s) = (s, old_s - q * s);
-            (old_t, t) = (t, old_t - q * t);
-        }
+    //     while r != 0 {
+    //         let q = old_r / r;
+    //         (old_r, r) = (r, old_r - q * r);
+    //         (old_s, s) = (s, old_s - q * s);
+    //         (old_t, t) = (t, old_t - q * t);
+    //     }
 
-        (old_r.abs() as u64, t.abs() as u64, s.abs() as u64)
-    }
+    //     (old_r.abs() as u64, t.abs() as u64, s.abs() as u64)
+    // }
 
-    /// Returns (quotient, subtracted, remainder)
-    fn subtract_largest_multiple(self, mut other: Self) -> Option<(Self, Self, Self)> {
-        let my_degree = self.degree();
-        let other_degree = other.degree();
+    // /// Returns (quotient, subtracted, remainder)
+    // fn subtract_largest_multiple(self, mut other: Self) -> Option<(Self, Self, Self)> {
+    //     let my_degree = self.degree();
+    //     let other_degree = other.degree();
 
-        if my_degree < other_degree {
-            return None;
-        }
+    //     if my_degree < other_degree {
+    //         return None;
+    //     }
 
-        let my_coeff = self.get_nth_coefficient(my_degree);
-        let other_coeff = other.get_nth_coefficient(other_degree);
+    //     let my_coeff = self.get_nth_coefficient(my_degree);
+    //     let other_coeff = other.get_nth_coefficient(other_degree);
 
-        let (_, mine_red, other_red) = Self::extended_euclidean_algo(my_coeff, other_coeff);
+    //     let (_, mine_red, other_red) = Self::extended_euclidean_algo(my_coeff, other_coeff);
 
-        let Some(inverse) = Self::invert_in_modulo(other_red) else {
-            return None;
+    //     let Some(inverse) = Self::invert_in_modulo(other_red) else {
+    //         return None;
+    //     };
+
+    //     let multiplier = mine_red * inverse;
+    //     let mut quotient = Self::integer_to_poly(multiplier);
+
+    //     if my_degree > other_degree {
+    //         other = other.unchecked_mulx(my_degree - other_degree);
+    //         quotient = quotient.unchecked_mulx(my_degree - other_degree);
+    //     }
+
+    //     let multiplied = other.mul_modulo(multiplier);
+    //     let diff = self.sub(multiplied);
+
+    //     debug_assert!(!(diff.degree() == my_degree && !diff.is_zero()));
+    //     // if diff.degree() == my_degree && !diff.is_zero() {
+    //     //     panic!("Oh noes! {self}, {other}, {quotient}, {multiplied}, {diff}");
+    //     // }
+
+    //     Some((quotient, multiplied, diff))
+    // }
+
+    // pub fn invert(self) -> Option<Self> {
+    //     let mut t = Self::ZERO;
+    //     let mut r = T::OVERFLOW;
+    //     let mut new_t = Self::ONE;
+    //     let mut new_r = self;
+
+    //     // Checking degree is faster than checking zero.
+    //     while new_r.degree() > 0 || !new_r.is_zero() {
+    //         let Some((quotient, _, remainder)) = Self::subtract_largest_multiple(r, new_r) else {
+    //             println!("Invert None 0");
+    //             return None;
+    //         };
+
+    //         (r, new_r) = (new_r, remainder);
+    //         (t, new_t) = (new_t, t.sub(quotient.mul(new_t)));
+    //     }
+
+    //     if r.degree() > 0 {
+    //         println!("Invert None 1: ({t}) -- ({r}) -- ({new_t}) -- ({new_r})");
+    //         return None;
+    //     }
+
+    //     let r_as_integer = r.get_nth_coefficient(0);
+    //     let Some(inverse) = Self::invert_in_modulo(r_as_integer) else {
+    //         println!("Invert None 2");
+    //         return None;
+    //     };
+
+    //     Some(t.mul_modulo(inverse))
+    // }
+
+    pub const fn make_from_coeffs_desc(mut coeffs: &[u64]) -> Self {
+        let to_do = if coeffs.len() > T::DEGREE {
+            T::DEGREE
+        } else {
+            coeffs.len()
         };
 
-        let multiplier = mine_red * inverse;
-        let mut quotient = Self::integer_to_poly(multiplier);
+        (_, coeffs) = coeffs.split_at(coeffs.len() - to_do);
 
-        if my_degree > other_degree {
-            other = other.unchecked_mulx(my_degree - other_degree);
-            quotient = quotient.unchecked_mulx(my_degree - other_degree);
-        }
+        let last_block_length = coeffs.len() % 64;
 
-        let multiplied = other.mul_modulo(multiplier);
-        let diff = self.sub(multiplied);
+        let (last_block, mut coeffs) = coeffs.split_at(last_block_length);
 
-        debug_assert!(!(diff.degree() == my_degree && !diff.is_zero()));
-        // if diff.degree() == my_degree && !diff.is_zero() {
-        //     panic!("Oh noes! {self}, {other}, {quotient}, {multiplied}, {diff}");
-        // }
+        let last_block = Packet::from_coeffs(last_block);
 
-        Some((quotient, multiplied, diff))
-    }
-
-    pub fn invert(self) -> Option<Self> {
-        let mut t = Self::ZERO;
-        let mut r = T::OVERFLOW;
-        let mut new_t = Self::ONE;
-        let mut new_r = self;
-
-        // Checking degree is faster than checking zero.
-        while new_r.degree() > 0 || !new_r.is_zero() {
-            let Some((quotient, _, remainder)) = Self::subtract_largest_multiple(r, new_r) else {
-                println!("Invert None 0");
-                return None;
-            };
-
-            (r, new_r) = (new_r, remainder);
-            (t, new_t) = (new_t, t.sub(quotient.mul(new_t)));
-        }
-
-        if r.degree() > 0 {
-            println!("Invert None 1: ({t}) -- ({r}) -- ({new_t}) -- ({new_r})");
-            return None;
-        }
-
-        let r_as_integer = r.get_nth_coefficient(0);
-        let Some(inverse) = Self::invert_in_modulo(r_as_integer) else {
-            println!("Invert None 2");
-            return None;
-        };
-
-        Some(t.mul_modulo(inverse))
-    }
-
-    pub const fn unchecked_make_from_coeffs_desc(coeffs: &[u64]) -> Self {
         let mut acc = Self::ZERO;
 
-        let mut i = 0;
+        let mut insertion_idx = 0;
 
-        while i != coeffs.len() {
-            acc = acc.unchecked_mulx(1).add(Self::integer_to_poly(coeffs[i]));
+        while coeffs.len() != 0 {
+            let (rest, last) = coeffs.split_at(coeffs.len() - 64);
 
-            i += 1;
+            coeffs = rest;
+
+            acc.internal[insertion_idx] = Packet::from_coeffs(last);
+
+            insertion_idx += 1;
         }
+
+        acc.internal[insertion_idx] = last_block;
 
         acc
     }
@@ -486,33 +490,39 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         Ok(())
     }
 
-    pub const fn iter() -> FinitePolyIterator<T, SIZE> {
+    pub fn iter() -> FinitePolyIterator<T, SIZE, LOG2> {
         FinitePolyIterator {
-            state: 0,
+            coeffs: vec![0; T::DEGREE],
             _item: PhantomData,
         }
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Debug for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Debug
+    for FinitePoly<T, SIZE, LOG2>
+{
     fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.format_full(&mut f)?;
         write!(f, " [")?;
         for val in self.internal[1..].iter().rev() {
-            write!(f, "0b{val:b}, ")?;
+            write!(f, "{val}, ")?;
         }
-        write!(f, "0b{:b}", self.internal[0])?;
+        write!(f, "{}", self.internal[0])?;
         write!(f, "]")
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Display for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Display
+    for FinitePoly<T, SIZE, LOG2>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.format_filtered(f)
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Mul<Self> for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Mul<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
@@ -520,7 +530,9 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> Mul<Self> for FinitePoly<T, SIZE>
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Add<Self> for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Add<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
@@ -528,7 +540,9 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> Add<Self> for FinitePoly<T, SIZE>
     }
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Sub<Self> for FinitePoly<T, SIZE> {
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Sub<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
@@ -536,101 +550,110 @@ impl<T: PolySettings<SIZE>, const SIZE: usize> Sub<Self> for FinitePoly<T, SIZE>
     }
 }
 
-pub struct FinitePolyIterator<T: PolySettings<SIZE>, const SIZE: usize> {
-    state: u128,
-    _item: PhantomData<FinitePoly<T, SIZE>>,
+pub struct FinitePolyIterator<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> {
+    coeffs: Vec<u64>,
+    _item: PhantomData<FinitePoly<T, SIZE, LOG2>>,
 }
 
-impl<T: PolySettings<SIZE>, const SIZE: usize> Iterator for FinitePolyIterator<T, SIZE> {
-    type Item = FinitePoly<T, SIZE>;
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Iterator
+    for FinitePolyIterator<T, SIZE, LOG2>
+{
+    type Item = FinitePoly<T, SIZE, LOG2>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.state == FinitePoly::<T, SIZE>::LAST_ITERATOR_ELEM {
+        if self.coeffs.len() == 0 {
             return None;
         }
 
-        let mut acc = FinitePoly::<T, SIZE>::ZERO;
+        let val = Self::Item::make_from_coeffs_desc(&self.coeffs[..]);
 
-        for power in (0..T::DEGREE).rev() {
-            let coeff = self.state / (T::MODULO as u128).pow(power as u32);
-            let coeff = coeff % T::MODULO as u128;
+        let mut carry = 1;
+        let mut is_zero = true;
 
-            acc = acc
-                .unchecked_mulx(1)
-                .add(FinitePoly::<T, SIZE>::ONE.mul_modulo(coeff as u64));
+        for elem in self.coeffs.iter_mut().rev() {
+            let mut new_val = *elem + carry;
+
+            carry = new_val / T::MODULO as u64;
+            new_val -= carry * T::MODULO as u64;
+
+            *elem = new_val;
+
+            is_zero &= new_val == 0;
+
+            if carry == 0 {
+                break;
+            }
         }
 
-        self.state += 1;
+        if is_zero {
+            self.coeffs = vec![];
+        }
 
-        Some(acc)
+        Some(val)
     }
 }
 
-pub const fn log2(x: usize) -> usize {
-    (usize::BITS - (x - 1).leading_zeros()) as _
+pub const fn log2(x: u64) -> usize {
+    (64 - (x - 1).leading_zeros()) as _
 }
 
-const fn usable_bits(logarithm: usize) -> usize {
-    let available_per = 64 - (64 % logarithm);
-
-    available_per
+pub const fn get_size<T: PolySettings<0, 0>>() -> usize {
+    T::DEGREE.div_ceil(64)
 }
 
-const fn poly_num_u64s(logarithm: usize, deg: usize) -> usize {
-    let total = logarithm * (deg + 1);
-    let usable = usable_bits(logarithm);
-    total.div_ceil(usable)
-}
-
-pub const fn get_size<T: PolySettings<0>>() -> usize {
-    poly_num_u64s(log2(T::MODULO), T::DEGREE)
+pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
+    log2(T::MODULO)
 }
 
 #[allow(unused_macros)]
 macro_rules! make_ring {
-    ($name:ident = $modulo:literal, $degree:literal, [$($coefficients:literal),+]) => {
+    ($name:ident = % $modulo:literal ^ $degree:literal, [$($coefficients:literal),+]) => {
         struct Settings;
 
-        impl<const SIZE: usize> $crate::PolySettings<SIZE> for Settings {
+        impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for Settings {
             const DEGREE: usize = $degree;
-            const MODULO: usize = $modulo;
+            const MODULO: u64 = $modulo;
 
-            const OVERFLOW: $crate::FinitePoly<Self, SIZE> =
-                <$crate::FinitePoly<Self, SIZE>>::unchecked_make_from_coeffs_desc(&[$($coefficients),+]);
+            const OVERFLOW: $crate::FinitePoly<Self, SIZE, LOG2> =
+                <$crate::FinitePoly<Self, SIZE, LOG2>>::make_from_coeffs_desc(&[$($coefficients),+]);
         }
 
-        type $name = $crate::FinitePoly<Settings, {$crate::get_size::<Settings>()}>;
-    }
+        type $name = $crate::FinitePoly<
+            Settings,
+            { $crate::get_size::<Settings>() },
+            { $crate::log2($modulo) },
+        >;
+    };
 }
 
 #[cfg(test)]
 mod tests {
     make_ring! {
-        F25 = 5, 5, [1, 4]
+        F125 = %5 ^3, [2, 2]
     }
 
     #[test]
     fn integer_to_poly() {
-        let one_const = F25::ONE;
-        let one_phi = F25::integer_to_poly(1);
+        let one_const = F125::ONE;
+        let one_phi = F125::from_int(1);
 
         assert_eq!(one_const, one_phi);
 
         for i in 0..20 {
             let pre_reduced = i % 5;
 
-            let value_1 = F25::integer_to_poly(i);
-            let value_2 = F25::integer_to_poly(pre_reduced);
-            let mut value_3 = F25::ZERO;
+            let value_1 = F125::from_int(i);
+            let value_2 = F125::from_int(pre_reduced);
+            let mut value_3 = F125::ZERO;
 
             for _ in 0..i {
-                value_3 = value_3 + F25::ONE;
+                value_3 = value_3 + F125::ONE;
             }
 
-            let mut value_4 = F25::ZERO;
+            let mut value_4 = F125::ZERO;
 
             for _ in 0..pre_reduced {
-                value_4 = value_4 + F25::ONE;
+                value_4 = value_4 + F125::ONE;
             }
 
             assert_eq!(value_1, value_2);
@@ -640,12 +663,13 @@ mod tests {
     }
 
     #[test]
-    fn equality() {
-        for lhs in F25::iter() {
-            for rhs in F25::iter() {
+    fn coeff_equality() {
+        for lhs in F125::iter() {
+            let left = [0, 1, 2, 3, 4].map(|x| lhs.get_nth_coefficient(x));
+            for rhs in F125::iter() {
                 let mut equal = true;
                 for power in 0..5 {
-                    let coeff_left = lhs.get_nth_coefficient(power) % 5;
+                    let coeff_left = left[power];
                     let coeff_right = rhs.get_nth_coefficient(power) % 5;
 
                     equal &= coeff_left == coeff_right;
@@ -653,6 +677,154 @@ mod tests {
 
                 assert_eq!(equal, lhs == rhs);
             }
+        }
+    }
+
+    #[test]
+    fn equality_is_equality() {
+        // An equivalence relation ~ satisfies:
+        // 1. x ~ x
+        // 2. x ~ y ==> y ~ x
+        // 3. x ~ y and y ~ z ==> x ~ z
+
+        // Test identity.
+        for x in F125::iter() {
+            assert_eq!(x, x);
+        }
+
+        // Test reflexivity.
+        for x in F125::iter() {
+            for y in F125::iter() {
+                assert_eq!(x == y, y == x);
+            }
+        }
+
+        // Test transitivity.
+        for x in F125::iter() {
+            for y in F125::iter() {
+                for z in F125::iter() {
+                    if x == y && y == z {
+                        assert_eq!(x, z);
+                    }
+                }
+            }
+        }
+    }
+
+    // We happen to have a field. The field axioms are:
+    // 1.  Exists `+: F x F -> F` (done.)
+    // 2.  Exists `*: F x F -> F` (done.)
+    // 3.  For all: `x + y = y + x`.
+    // 4.  For all: `x * y = y * x`.
+    // 5.  For all: `x + (y + z) = (x + y) + z`
+    // 6.  For all: `x * (y * z) = (x * y) * z`
+    // 7.  Exists `0 in F`: For all: `x + 0 = x`.
+    // 8.  Exists `1 in F`: For all: `x * 1 = x`.
+    // 9.  For all: `x * (y + z) = x * y + x * z`.
+    // 10. For all `x in F`: Exists `y in F`: `x + y = 0`
+    // The previous 10 give us a Commutative Unital Ring
+    // (from now on, this is just a ring). These two extra
+    // axioms make it a field:
+    // 11. `0 != 1`.
+    // 12. For all `x in F`: `x != y` implies Exists `y in F`: `x * y = 1`
+
+    #[test]
+    fn addition_commutes() {
+        for x in F125::iter() {
+            for y in F125::iter() {
+                assert_eq!(x + y, y + x);
+            }
+        }
+    }
+
+    #[test]
+    fn multiplication_commutes() {
+        for x in F125::iter() {
+            for y in F125::iter() {
+                assert_eq!(x * y, y * x);
+            }
+        }
+    }
+
+    #[test]
+    fn addition_associates() {
+        for x in F125::iter() {
+            for y in F125::iter() {
+                for z in F125::iter() {
+                    assert_eq!(x + (y + z), (x + y) + z);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn multiplication_associates() {
+        for x in F125::iter() {
+            for y in F125::iter() {
+                for z in F125::iter() {
+                    assert_eq!(x * (y * z), (x * y) * z);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn zero_is_zero() {
+        for x in F125::iter() {
+            assert_eq!(x + F125::ZERO, x);
+        }
+    }
+
+    #[test]
+    fn one_is_one() {
+        for x in F125::iter() {
+            assert_eq!(x * F125::ONE, x);
+        }
+    }
+
+    #[test]
+    fn multiplication_distributes() {
+        for x in F125::iter() {
+            for y in F125::iter() {
+                for z in F125::iter() {
+                    assert_eq!(x * (y + z), (x * y) + (x * z));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn additive_inverses() {
+        'a: for x in F125::iter() {
+            for y in F125::iter() {
+                if x + y == F125::ZERO {
+                    continue 'a;
+                }
+            }
+
+            panic!("Additive inverse for {x} not found!");
+        }
+    }
+
+    #[test]
+    fn zero_is_not_one() {
+        assert_ne!(F125::ZERO, F125::ONE);
+    }
+
+    #[test]
+    fn multiplicative_inverse() {
+        'a: for x in F125::iter() {
+            if x == F125::ZERO {
+                continue;
+            }
+
+            for y in F125::iter() {
+                if x * y == F125::ONE {
+                    continue 'a;
+                }
+            }
+
+            panic!("Multiplicative inverse for {x} not found!");
         }
     }
 }
