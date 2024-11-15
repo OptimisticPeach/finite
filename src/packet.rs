@@ -208,6 +208,19 @@ impl<const LOG2: usize> Packet<LOG2> {
         result
     }
 
+    pub const fn set_coeff(mut self, idx: usize, coeff: u64) -> Self {
+        let mask = 1u64 << idx;
+        let unset_mask = !mask;
+
+        self = self.and_u64(unset_mask);
+
+        let num = Self::from_int(coeff);
+
+        self = self.or(num.lsh(idx));
+
+        self
+    }
+
     pub const fn from_coeffs(coeffs: &[u64]) -> Self {
         let mut me = Self::new();
 

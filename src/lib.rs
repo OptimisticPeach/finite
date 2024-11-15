@@ -1,11 +1,13 @@
 use std::{
     fmt::{Debug, Display, Write},
     marker::PhantomData,
-    ops::{Add, Mul, Sub},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
+use numerics::*;
 use packet::Packet;
 
+mod numerics;
 mod packet;
 
 pub trait PolySettings<const SIZE: usize, const LOG2: usize>: Sized {
@@ -242,6 +244,9 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     }
 
     pub const fn unchecked_mulx(mut self, power: usize) -> Self {
+        if power == 0 {
+            return self;
+        }
         let mut done = 0;
 
         let mut carry = Packet::new();
@@ -258,7 +263,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     }
 
     pub const fn get_nth_coefficient(self, coeff: usize) -> u64 {
-        if coeff > T::DEGREE {
+        if coeff >= T::DEGREE {
             return 0;
         }
 
@@ -268,14 +273,26 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         self.internal[u64_idx].extract_coefficient(within_u64_idx)
     }
 
-    pub fn mul(self, other: Self) -> Self {
+    pub const fn set_coeff(mut self, idx: usize, coeff: u64) -> Self {
+        if idx >= T::DEGREE {
+            return self;
+        }
+
+        let u64_idx = idx / 64;
+        let within_u64_idx = idx % 64;
+
+        self.internal[u64_idx] = self.internal[u64_idx].set_coeff(within_u64_idx, coeff);
+
+        self
+    }
+
+    pub const fn mul(self, other: Self) -> Self {
         let mut acc = Self::ZERO;
         let mut power_x = self;
 
         let mut powers_done = 0;
 
         while powers_done < T::DEGREE {
-            // println!("Acc: {acc}, Power X: {power_x}");
             let coeff = other.get_nth_coefficient(powers_done);
 
             if coeff != 0 {
@@ -294,115 +311,105 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         acc
     }
 
-    // const fn invert_in_modulo(n: u64) -> Option<u64> {
-    //     let mut t = 0i64;
-    //     let mut r = T::MODULO as u64;
-    //     let mut new_t = 1i64;
-    //     let mut new_r = n;
+    /// If possible, returns self/other, self - other * self/other.
+    pub const fn divide_remainder(self, other: Self) -> Option<(Self, Self)> {
+        let other_degree = other.degree();
 
-    //     while new_r != 0 {
-    //         let quotient = r / new_r;
-    //         (t, new_t) = (new_t, t - quotient as i64 * new_t);
-    //         (r, new_r) = (new_r, r - quotient * new_r);
-    //     }
+        let mut quotient = Self::ZERO;
+        let mut remainder = self;
 
-    //     if r > 1 {
-    //         return None;
-    //     }
+        let mut remainder_degree = remainder.degree();
 
-    //     if t < 0 {
-    //         t += T::MODULO as i64;
-    //     }
+        while other_degree <= remainder_degree && !remainder.is_zero() {
+            let difference_in_degree = remainder_degree - other_degree;
+            // println!("Quotient: {quotient}, Remainder: {remainder}, diff: {difference_in_degree}, self: {self}, other: {other}");
+            let my_coeff = remainder.get_nth_coefficient(remainder_degree);
+            let other_coeff = other.get_nth_coefficient(other_degree);
 
-    //     Some(t as _)
-    // }
+            let Some(inverse) = numerics::divide_modulo(T::MODULO, my_coeff, other_coeff) else {
+                return None;
+            };
 
-    /// Returns: (gcd, n/gcd, m/gcd).
-    // const fn extended_euclidean_algo(n: u64, m: u64) -> (u64, u64, u64) {
-    //     let mut old_r = n as i64;
-    //     let mut old_s = 1;
-    //     let mut old_t = 0;
-    //     let mut r = m as i64;
-    //     let mut s = 0;
-    //     let mut t = 1;
+            let division = Self::from_int(inverse).unchecked_mulx(difference_in_degree);
+            quotient = quotient.add(division);
 
-    //     while r != 0 {
-    //         let q = old_r / r;
-    //         (old_r, r) = (r, old_r - q * r);
-    //         (old_s, s) = (s, old_s - q * s);
-    //         (old_t, t) = (t, old_t - q * t);
-    //     }
+            let product = other
+                .mul_modulo(inverse)
+                .unchecked_mulx(difference_in_degree);
 
-    //     (old_r.abs() as u64, t.abs() as u64, s.abs() as u64)
-    // }
+            remainder = remainder.sub(product);
 
-    // /// Returns (quotient, subtracted, remainder)
-    // fn subtract_largest_multiple(self, mut other: Self) -> Option<(Self, Self, Self)> {
-    //     let my_degree = self.degree();
-    //     let other_degree = other.degree();
+            remainder_degree = remainder.degree();
+        }
 
-    //     if my_degree < other_degree {
-    //         return None;
-    //     }
+        Some((quotient, remainder))
+    }
 
-    //     let my_coeff = self.get_nth_coefficient(my_degree);
-    //     let other_coeff = other.get_nth_coefficient(other_degree);
+    pub const fn divide_quotient_poly_by_self(self) -> Option<(Self, Self)> {
+        let my_degree = T::DEGREE;
+        let other_degree = self.degree();
 
-    //     let (_, mine_red, other_red) = Self::extended_euclidean_algo(my_coeff, other_coeff);
+        let difference_in_degree = my_degree - other_degree;
+        let my_coeff = 1;
+        let other_coeff = self.get_nth_coefficient(other_degree);
 
-    //     let Some(inverse) = Self::invert_in_modulo(other_red) else {
-    //         return None;
-    //     };
+        let Some(inverse) = numerics::divide_modulo(T::MODULO, my_coeff, other_coeff) else {
+            return None;
+        };
 
-    //     let multiplier = mine_red * inverse;
-    //     let mut quotient = Self::integer_to_poly(multiplier);
+        let division = if difference_in_degree == T::DEGREE {
+            return Some((Self::ZERO.sub(T::OVERFLOW).mul_modulo(inverse), Self::ZERO));
+        } else {
+            Self::from_int(inverse).unchecked_mulx(difference_in_degree)
+        };
 
-    //     if my_degree > other_degree {
-    //         other = other.unchecked_mulx(my_degree - other_degree);
-    //         quotient = quotient.unchecked_mulx(my_degree - other_degree);
-    //     }
+        let to_remove = self.set_coeff(other_degree, 0);
 
-    //     let multiplied = other.mul_modulo(multiplier);
-    //     let diff = self.sub(multiplied);
+        let product = to_remove.mul(division);
 
-    //     debug_assert!(!(diff.degree() == my_degree && !diff.is_zero()));
-    //     // if diff.degree() == my_degree && !diff.is_zero() {
-    //     //     panic!("Oh noes! {self}, {other}, {quotient}, {multiplied}, {diff}");
-    //     // }
+        let remainder = Self::ZERO.sub(T::OVERFLOW).sub(product);
 
-    //     Some((quotient, multiplied, diff))
-    // }
+        Some((division, remainder))
+    }
 
-    // pub fn invert(self) -> Option<Self> {
-    //     let mut t = Self::ZERO;
-    //     let mut r = T::OVERFLOW;
-    //     let mut new_t = Self::ONE;
-    //     let mut new_r = self;
+    // Does not always work if your ring is not a field.
+    pub const fn invert(self) -> Option<Self> {
+        let mut t = Self::ZERO;
+        let mut r;
+        let mut new_t = Self::ONE;
+        let mut new_r = self;
 
-    //     // Checking degree is faster than checking zero.
-    //     while new_r.degree() > 0 || !new_r.is_zero() {
-    //         let Some((quotient, _, remainder)) = Self::subtract_largest_multiple(r, new_r) else {
-    //             println!("Invert None 0");
-    //             return None;
-    //         };
+        // `r` should actually be x^degree - T::OVERFLOW = p(x).
+        // However, we cannot represent that number, so instead
+        // we use the special case function to compute p(x)/self.
 
-    //         (r, new_r) = (new_r, remainder);
-    //         (t, new_t) = (new_t, t.sub(quotient.mul(new_t)));
-    //     }
+        let Some((quotient, remainder)) = self.divide_quotient_poly_by_self() else {
+            return None;
+        };
 
-    //     if r.degree() > 0 {
-    //         println!("Invert None 1: ({t}) -- ({r}) -- ({new_t}) -- ({new_r})");
-    //         return None;
-    //     }
+        (r, new_r) = (new_r, remainder);
+        (t, new_t) = (new_t, t.sub(quotient.mul(new_t)));
 
-    //     let r_as_integer = r.get_nth_coefficient(0);
-    //     let Some(inverse) = Self::invert_in_modulo(r_as_integer) else {
-    //         println!("Invert None 2");
-    //         return None;
-    //     };
+        while !new_r.is_zero() {
+            let Some((quotient, remainder)) = Self::divide_remainder(r, new_r) else {
+                return None;
+            };
 
-    //     Some(t.mul_modulo(inverse))
-    // }
+            (r, new_r) = (new_r, remainder);
+            (t, new_t) = (new_t, t.sub(quotient.mul(new_t)));
+        }
+
+        if r.degree() > 0 {
+            return None;
+        }
+
+        let r_as_integer = r.get_nth_coefficient(0);
+        let Some(inverse) = numerics::invert_in_modulo(T::MODULO, r_as_integer) else {
+            return None;
+        };
+
+        Some(t.mul_modulo(inverse))
+    }
 
     pub const fn make_from_coeffs_desc(mut coeffs: &[u64]) -> Self {
         let to_do = if coeffs.len() > T::DEGREE {
@@ -530,6 +537,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Mul<Self
     }
 }
 
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Div<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self {
+        self * rhs.invert().unwrap()
+    }
+}
+
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Add<Self>
     for FinitePoly<T, SIZE, LOG2>
 {
@@ -547,6 +564,38 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Sub<Self
 
     fn sub(self, rhs: Self) -> Self {
         self.sub(rhs)
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> AddAssign<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> SubAssign<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> MulAssign<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> DivAssign<Self>
+    for FinitePoly<T, SIZE, LOG2>
+{
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
     }
 }
 
@@ -606,9 +655,14 @@ pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
 }
 
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! make_ring {
     ($name:ident = % $modulo:literal ^ $degree:literal, [$($coefficients:literal),+]) => {
         struct Settings;
+
+        impl Settings {
+            pub const OVERFLOW: $name = <Settings as $crate::PolySettings<{ $crate::get_size::<Settings>() }, { $crate::log2($modulo) }>>::OVERFLOW;
+        }
 
         impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for Settings {
             const DEGREE: usize = $degree;
@@ -813,18 +867,22 @@ mod tests {
 
     #[test]
     fn multiplicative_inverse() {
-        'a: for x in F125::iter() {
-            if x == F125::ZERO {
-                continue;
-            }
+        for x in F125::iter() {
+            let computed_inverse = x.invert();
 
+            let mut found_inverse = None;
             for y in F125::iter() {
                 if x * y == F125::ONE {
-                    continue 'a;
+                    found_inverse = Some(y);
+                    break;
                 }
             }
 
-            panic!("Multiplicative inverse for {x} not found!");
+            assert_eq!(computed_inverse, found_inverse, "Poly: {x}");
+
+            if !x.is_zero() && computed_inverse.is_none() {
+                panic!("Multiplicative inverse for {x} not found!");
+            }
         }
     }
 }
