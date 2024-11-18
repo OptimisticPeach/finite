@@ -10,7 +10,15 @@ use finite::make_ring;
 //
 
 make_ring! {
-    Nonsense = %7901 ^7, [7900, 0, 7896, 0, 7884]
+    Nonsense = Z % 7901, x^7 = [7900, 0, 7896, 0, 7884]
+}
+
+// make_ring! {
+//     Other = Z % 17, x^2 = [1, 1]
+// }
+
+trait Bar {
+    const fn foo();
 }
 
 fn main() {
@@ -53,16 +61,18 @@ fn main() {
     // }
 
     let val = Nonsense::make_from_coeffs_desc(&[1, 2, 3, 4, 5]);
+    let inverse = val.invert().unwrap();
+
     println!("{val}");
-    println!("{:?}", val.invert());
-    println!("{}", val * val.invert().unwrap());
+    println!("{:?}", inverse);
+    println!("{}", val * inverse);
 
     let mut avg_time_ms = 0.0f64;
 
     for _ in 0..20 {
         let start = Instant::now();
 
-        for _ in 0..1_000 {
+        for _ in 0..100_000 {
             let inverse = black_box(val).invert().unwrap();
             black_box(inverse);
         }
@@ -75,7 +85,28 @@ fn main() {
 
     println!(
         "Average time to divide: {}ms",
-        avg_time_ms / (20.0 * 1000.0)
+        avg_time_ms / (20.0 * 100000.0)
+    );
+
+    let mut avg_time_ms = 0.0f64;
+
+    for _ in 0..20 {
+        let start = Instant::now();
+
+        for _ in 0..100_000 {
+            let inverse = black_box(inverse).invert().unwrap();
+            black_box(inverse);
+        }
+
+        let elapsed = start.elapsed();
+
+        println!("{elapsed:?}");
+        avg_time_ms += elapsed.as_secs_f64() * 1000.0;
+    }
+
+    println!(
+        "Average time to divide: {}ms",
+        avg_time_ms / (20.0 * 100000.0)
     );
 
     // println!(

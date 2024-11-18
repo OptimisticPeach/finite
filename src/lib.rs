@@ -4,7 +4,6 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
-use numerics::*;
 use packet::Packet;
 
 mod numerics;
@@ -208,6 +207,47 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         let mut i = 0;
         while i < SIZE {
             self.internal[i] = Self::sub_within(self.internal[i], other.internal[i]);
+            i += 1;
+        }
+
+        self
+    }
+
+    const fn neg_within(n: Packet<LOG2>) -> Packet<LOG2> {
+        let mut result = n;
+        let mut carry = n;
+        let bumped;
+
+        (bumped, carry) = carry.left_shift_horizontal();
+
+        let mut underflow_carry = Self::OVERFLOW.and_u64(bumped);
+
+        while !carry.is_zero() || !underflow_carry.is_zero() {
+            let sub = result.xor(carry).xor(underflow_carry);
+
+            let new_carry = result
+                .not()
+                .and(carry.or(underflow_carry))
+                .or(carry.and(underflow_carry));
+
+            let (bumped, new_carry) = new_carry.left_shift_horizontal();
+
+            let new_underflow = Self::OVERFLOW.and_u64(bumped);
+
+            result = sub;
+            carry = new_carry;
+            underflow_carry = new_underflow;
+        }
+
+        result
+    }
+
+    pub const fn neg(mut self) -> Self {
+        let mut i = 0;
+
+        while i < SIZE {
+            self.internal[i] = Self::neg_within(self.internal[i]);
+
             i += 1;
         }
 
@@ -657,7 +697,7 @@ pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! make_ring {
-    ($name:ident = % $modulo:literal ^ $degree:literal, [$($coefficients:literal),+]) => {
+    ($name:ident = Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+]) => {
         struct Settings;
 
         impl Settings {
@@ -683,7 +723,7 @@ macro_rules! make_ring {
 #[cfg(test)]
 mod tests {
     make_ring! {
-        F125 = %5 ^3, [2, 2]
+        F125 = Z % 5, x^3 = [2, 2]
     }
 
     #[test]
