@@ -697,14 +697,15 @@ pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! make_ring {
-    ($name:ident = Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+]) => {
-        struct Settings;
+    ($($name:ident = $settings:ident { Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+] };)+) => {$(
+        struct $settings;
 
-        impl Settings {
-            pub const OVERFLOW: $name = <Settings as $crate::PolySettings<{ $crate::get_size::<Settings>() }, { $crate::log2($modulo) }>>::OVERFLOW;
+        impl $settings {
+            #[allow(dead_code)]
+            pub const OVERFLOW: $name = <$settings as $crate::PolySettings<{ $crate::get_size::<$settings>() }, { $crate::log2($modulo) }>>::OVERFLOW;
         }
 
-        impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for Settings {
+        impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for $settings {
             const DEGREE: usize = $degree;
             const MODULO: u64 = $modulo;
 
@@ -713,17 +714,17 @@ macro_rules! make_ring {
         }
 
         type $name = $crate::FinitePoly<
-            Settings,
-            { $crate::get_size::<Settings>() },
+            $settings,
+            { $crate::get_size::<$settings>() },
             { $crate::log2($modulo) },
         >;
-    };
+    )+};
 }
 
 #[cfg(test)]
 mod tests {
     make_ring! {
-        F125 = Z % 5, x^3 = [2, 2]
+        F125 = F125Settings { Z % 5, x^3 = [2, 2] };
     }
 
     #[test]

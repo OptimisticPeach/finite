@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{hint::black_box, time::Instant};
 
 use finite::make_ring;
@@ -10,16 +11,13 @@ use finite::make_ring;
 //
 
 make_ring! {
-    Nonsense = Z % 7901, x^7 = [7900, 0, 7896, 0, 7884]
+    Nonsense = NonsenseSettings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
+    Nonsense2 = Nonsense2Settings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
 }
 
 // make_ring! {
 //     Other = Z % 17, x^2 = [1, 1]
 // }
-
-trait Bar {
-    const fn foo();
-}
 
 fn main() {
     // let value = Nonsense::ONE;
