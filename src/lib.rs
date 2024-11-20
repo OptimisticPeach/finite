@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display, Write},
     marker::PhantomData,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 use packet::Packet;
@@ -594,6 +594,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Add<Self
 
     fn add(self, rhs: Self) -> Self {
         self.add(rhs)
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Neg
+    for FinitePoly<T, SIZE, LOG2>
+{
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        self.neg()
     }
 }
 

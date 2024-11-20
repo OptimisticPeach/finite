@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use std::{hint::black_box, time::Instant};
 
 use finite::make_ring;
