@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "finite"
+name = "finitely"
 version = "0.1.0"

@@ -1,6 +1,6 @@
 use std::{hint::black_box, time::Instant};
 
-use finite::make_ring;
+use finitely::make_ring;
 
 // make_ring! {
 //     F125 = %5 ^3, [2, 2]
@@ -57,7 +57,7 @@ fn main() {
     //     }
     // }
 
-    let val = Nonsense::make_from_coeffs_desc(&[1, 2, 3, 4, 5]);
+    let val = Nonsense::from_coeffs(&[1, 2, 3, 4, 5]);
     let inverse = val.invert().unwrap();
 
     println!("{val}");
