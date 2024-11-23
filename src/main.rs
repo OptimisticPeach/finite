@@ -10,7 +10,8 @@ use finitely::make_ring;
 //
 
 make_ring! {
-    Nonsense = NonsenseSettings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
+    /// abc
+    pub Nonsense = NonsenseSettings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
     Nonsense2 = Nonsense2Settings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
 }
 

@@ -1144,8 +1144,9 @@ pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! make_ring {
-    ($($name:ident = $settings:ident { Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+] };)+) => {$(
-        struct $settings;
+    ($($(#[$at:meta])* $view:vis $name:ident = $(#[$set_at:meta])* $settings:ident { Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+] };)+) => {$(
+        $(#[$set_at])*
+        $view struct $settings;
 
         impl $settings {
             #[allow(dead_code)]
@@ -1160,7 +1161,8 @@ macro_rules! make_ring {
                 <$crate::FinitePoly<Self, SIZE, LOG2>>::from_coeffs(&[$($coefficients),+]);
         }
 
-        type $name = $crate::FinitePoly<
+        $(#[$at])*
+        $view type $name = $crate::FinitePoly<
             $settings,
             { $crate::get_size::<$settings>() },
             { $crate::get_log2::<$settings>() },
