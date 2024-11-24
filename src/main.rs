@@ -11,8 +11,8 @@ use finitely::make_ring;
 
 make_ring! {
     /// abc
-    pub Nonsense = NonsenseSettings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
-    Nonsense2 = Nonsense2Settings { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
+    pub Nonsense = { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
+    Nonsense2 = { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
 }
 
 // make_ring! {

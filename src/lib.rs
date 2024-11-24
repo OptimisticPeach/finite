@@ -120,7 +120,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Clone
 /// we will be using the example ring:
 /// ```
 /// use finitely::make_ring;
-/// make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+/// make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
 /// ```
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePoly<T, SIZE, LOG2> {
     /// The zero polynomial.
@@ -147,7 +147,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// ```
     pub const fn splat(value: u64) -> Self {
         Self {
@@ -168,7 +168,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::from_int(2), F25::ONE + F25::ONE);
     /// assert_eq!(F25::from_int(5), F25::ZERO);
     /// ```
@@ -226,7 +226,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::ZERO.degree(), 0);
     /// assert_eq!(F25::ONE.degree(), 0);
     /// assert_eq!(F25::from_coeffs(&[1, 2]).degree(), 1);
@@ -265,7 +265,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// let value_1 = F25::from_coeffs(&[2, 1]);
     /// let value_2 = F25::from_coeffs(&[1, 0]);
     /// let product = F25::from_coeffs(&[3, 1]);
@@ -284,7 +284,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert!(F25::ZERO.is_zero());
     /// assert!(!F25::ONE.is_zero());
     /// let fake_5 = F25::ONE + F25::ONE + F25::ONE + F25::ONE + F25::ONE;
@@ -348,7 +348,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::ONE.add(F25::ONE), F25::from_int(2));
     /// assert_eq!(F25::from_int(4).add(F25::ONE), 0);
     /// ```
@@ -400,7 +400,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::from_int(3) - 1, 2);
     /// assert_eq!(F25::ZERO - F25::ONE, 4);
     /// ```
@@ -458,7 +458,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::from_coeffs(&[2, 3]).neg(), F25::from_coeffs(&[3, 2]));
     /// ```
     pub const fn neg(mut self) -> Self {
@@ -487,7 +487,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(
     ///     F25::from_coeffs(&[2, 4]).mul_modulo(2),
     ///     F25::from_coeffs(&[4, 3])
@@ -518,7 +518,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::ONE.mul_x(), F25::from_coeffs(&[1, 0]));
     /// assert_eq!(F25::ONE.mul_x().mul_x(), F25::from_coeffs(&[1, 3]));
     /// assert_eq!(F25::from_coeffs(&[4, 2]).mul_x(), F25::from_coeffs(&[1, 2]));
@@ -541,7 +541,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::ONE.unchecked_mulx(2), 0);
     /// ```
     pub const fn unchecked_mulx(mut self, power: usize) -> Self {
@@ -570,7 +570,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// let value = F25::from_coeffs(&[2, 3]);
     /// assert_eq!(value.get_nth_coeff(0), 3);
     /// assert_eq!(value.get_nth_coeff(1), 2);
@@ -593,7 +593,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// let value = F25::ZERO.set_coeff(0, 3).set_coeff(1, 2);
     /// assert_eq!(value.get_nth_coeff(0), 3);
     /// assert_eq!(value.get_nth_coeff(1), 2);
@@ -620,7 +620,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// let value_1 = F25::from_coeffs(&[1, 4]);
     /// let value_2 = F25::from_coeffs(&[2, 3]);
     /// assert_eq!(value_1 * value_2, value_2 * value_1);
@@ -660,7 +660,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// let numerator = F25::from_coeffs(&[1, 2]);
     /// let denominator = F25::from_coeffs(&[1, 4]);
     ///
@@ -712,7 +712,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// // Our quotient poly is x^2 + 4x + 2.
     /// let denominator = F25::from_coeffs(&[1, 3]);     // x + 3
     ///
@@ -769,7 +769,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::from_int(3).invert().unwrap(), 2);
     /// assert_eq!(F25::ONE.mul_x().invert().unwrap(), F25::from_coeffs(&[2, 3]));
     /// // Notice: x(2x + 3) = 1.
@@ -819,7 +819,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Example usage:
     /// ```
     /// # use finitely::make_ring;
-    /// # make_ring! { F25 = F25Settings { Z % 5, x^2 = [1, 3] }; }
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
     /// assert_eq!(F25::from_coeffs(&[2, 1]), F25::from_coeffs(&[7, 6]));
     /// ```
     pub const fn from_coeffs(mut coeffs: &[u64]) -> Self {
@@ -1141,32 +1141,191 @@ pub const fn get_log2<T: PolySettings<0, 0>>() -> usize {
     log2(T::MODULO)
 }
 
+#[doc(hidden)]
+#[macro_export]
+#[allow(unused_macros)]
+macro_rules! forward_const {
+    (
+        $view:vis, ($t:ty) :
+        $(
+            fn $name:ident($($param_name:ident $(* $idx:literal)? $(: $param_ty:ty)?),*) -> $ret_ty:ident$(<$generics:ident>)?;
+        )*
+    ) => {
+        $(
+            #[allow(dead_code)]
+            $view const fn $name($($param_name $(: $param_ty)?),*) -> $ret_ty$(<$generics>)? {
+                $crate::forward_const!(@result : ($ret_ty) : (<$t>::$name($($crate::forward_const!(@param: $param_name $(* $idx)?)),*)))
+            }
+        )*
+    };
+
+    (@param: $n:ident * $idx:literal) => {$n.0};
+    (@param: $($t:tt)*) => {$($t)*};
+    (@result: (Self) : ($($t:tt)*)) => {Self($($t)*)};
+    (@result: (Option) : ($($t:tt)*)) => {match $($t)* { Some(x) => Some(Self(x)), None => None }};
+    (@result: ($($t0:tt)*) : ($($t:tt)*)) => {$($t)*};
+}
+
+#[doc(hidden)]
+#[macro_export]
+#[allow(unused_macros)]
+macro_rules! forward_op_impl {
+    (@basic: $on:ty: $($name:ident -- $method:ident ($op:tt) $other:ident $(*$lit:literal)?),*) => {
+        $(
+            $crate::forward_op_impl!{@basic_inner: $on ; $name ; $method ; ($op) ; $other $(*$lit)?}
+        )*
+    };
+    (@basic_inner: $on:ty ; $name:ident ; $method:ident ; ($op:tt) ; $other:ident $(* $lit:literal)?) => {
+        impl ::std::ops::$name<$other> for $on {
+            type Output = Self;
+
+            fn $method(self, other: $other) -> Self {
+                Self(self.0 $op $crate::forward_const!(@param: other $(* $lit)?))
+            }
+        }
+    };
+
+    (@assign: $on:ty: $($name:ident -- $method:ident $other:ident $(*$lit:literal)?),*) => {
+        $(
+            $crate::forward_op_impl!{@assign_inner: $on ; $name ; $method ; $other $(*$lit)?}
+        )*
+    };
+    (@assign_inner: $on:ty ; $name:ident ; $method:ident ; $other:ident $(* $lit:literal)?) => {
+        impl ::std::ops::$name<$other> for $on {
+            fn $method(&mut self, other: $other) {
+                self.0.$method($crate::forward_const!(@param: other $(* $lit)?))
+            }
+        }
+    };
+}
+
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! make_ring {
-    ($($(#[$at:meta])* $view:vis $name:ident = $(#[$set_at:meta])* $settings:ident { Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+] };)+) => {$(
-        $(#[$set_at])*
-        $view struct $settings;
+    ($($(#[$at:meta])* $view:vis $name:ident = { Z % $modulo:literal, x^ $degree:literal = [$($coefficients:literal),+] };)+) => {$(
+        $(#[$at])*
+        #[derive(PartialEq, Copy, Clone)]
+        $view struct $name($crate::FinitePoly<Self, {$crate::get_size::<Self>()}, {$crate::get_log2::<Self>()}>);
 
-        impl $settings {
-            #[allow(dead_code)]
-            pub const OVERFLOW: $name = <$settings as $crate::PolySettings<{ $crate::get_size::<$settings>() }, { $crate::get_log2::<Self>() }>>::OVERFLOW;
-        }
-
-        impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for $settings {
+        impl<const SIZE: usize, const LOG2: usize> $crate::PolySettings<SIZE, LOG2> for $name {
             const DEGREE: usize = $degree;
             const MODULO: u64 = $modulo;
 
-            const OVERFLOW: $crate::FinitePoly<Self, SIZE, LOG2> =
-                <$crate::FinitePoly<Self, SIZE, LOG2>>::from_coeffs(&[$($coefficients),+]);
+            const OVERFLOW: $crate::FinitePoly<Self, SIZE, LOG2> = $crate::FinitePoly::<Self, SIZE, LOG2>::from_coeffs(&[$($coefficients),+]);
         }
 
-        $(#[$at])*
-        $view type $name = $crate::FinitePoly<
-            $settings,
-            { $crate::get_size::<$settings>() },
-            { $crate::get_log2::<$settings>() },
-        >;
+        impl $name {
+            #[allow(dead_code)]
+            $view const LOG2: usize = $crate::get_size::<Self>();
+            #[allow(dead_code)]
+            $view const SIZE: usize = $crate::get_log2::<Self>();
+            #[allow(dead_code)]
+            $view const OVERFLOW: Self = Self(<Self as $crate::PolySettings<{Self::LOG2}, {Self::SIZE}>>::OVERFLOW);
+
+            $view const ZERO: Self = Self($crate::FinitePoly::<Self, {$crate::get_size::<Self>()}, {$crate::get_log2::<Self>()}>::ZERO);
+            $view const ONE: Self = Self($crate::FinitePoly::<Self, {$crate::get_size::<Self>()}, {$crate::get_log2::<Self>()}>::ONE);
+
+            $crate::forward_const! {
+                $view, ($crate::FinitePoly<Self, {$crate::get_size::<Self>()}, {$crate::get_log2::<Self>()}>) :
+                fn splat(value: u64) -> Self;
+                fn from_int(value: u64) -> Self;
+                fn degree(self*0) -> usize;
+                fn eq(self*0, other*0: Self) -> bool;
+                fn is_zero(self*0) -> bool;
+                fn add(self*0, other*0: Self) -> Self;
+                fn sub(self*0, other*0: Self) -> Self;
+                fn mul(self*0, other*0: Self) -> Self;
+                fn neg(self*0) -> Self;
+                fn mul_modulo(self*0, by: u64) -> Self;
+                fn mul_x(self*0) -> Self;
+                fn unchecked_mulx(self*0, power: usize) -> Self;
+                fn get_nth_coeff(self*0, coeff: usize) -> u64;
+                fn set_coeff(self*0, idx: usize, coeff: u64) -> Self;
+                fn invert(self*0) -> Option<Self>;
+                fn from_coeffs(coeffs: &[u64]) -> Self;
+            }
+
+            #[allow(dead_code)]
+            $view const fn divide_remainder(self, other: Self) -> Option<(Self, Self)> {
+                match self.0.divide_remainder(other.0) {
+                    Some((x, y)) => Some((Self(x), Self(y))),
+                    None => None
+                }
+            }
+
+            #[allow(dead_code)]
+            $view const fn divide_quotient_poly_by_self(self) -> Option<(Self, Self)> {
+                match self.0.divide_quotient_poly_by_self() {
+                    Some((x, y)) => Some((Self(x), Self(y))),
+                    None => None
+                }
+            }
+
+            $view fn iter() -> impl Iterator<Item = Self> {
+                $crate::FinitePoly::<Self, {$crate::get_size::<Self>()}, {$crate::get_log2::<Self>()}>::iter().map(|x| Self(x))
+            }
+        }
+
+        const _: () = {
+            type Poly = $crate::FinitePoly<$name, {$crate::get_size::<$name>()}, {$crate::get_log2::<$name>()}>;
+            impl From<$name> for Poly {
+                fn from(other: $name) -> Self {
+                    other.0
+                }
+            }
+
+            impl From<Poly> for $name {
+                fn from(other: Poly) -> Self {
+                    Self(other)
+                }
+            }
+
+            impl ::std::fmt::Debug for $name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    <Poly as ::std::fmt::Debug>::fmt(&self.0, f)
+                }
+            }
+
+            impl ::std::fmt::Display for $name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    <Poly as ::std::fmt::Display>::fmt(&self.0, f)
+                }
+            }
+
+            impl ::std::cmp::Eq for $name {}
+
+            $crate::forward_op_impl! {
+                @basic: $name:
+                Add -- add (+) u64,
+                Add -- add (+) Poly,
+                Add -- add (+) $name * 0,
+                Sub -- sub (-) u64,
+                Sub -- sub (-) Poly,
+                Sub -- sub (-) $name * 0,
+                Mul -- mul (*) u64,
+                Mul -- mul (*) Poly,
+                Mul -- mul (*) $name * 0,
+                Div -- div (/) u64,
+                Div -- div (/) Poly,
+                Div -- div (/) $name * 0
+            }
+
+            $crate::forward_op_impl! {
+                @assign: $name:
+                AddAssign -- add_assign u64,
+                AddAssign -- add_assign Poly,
+                AddAssign -- add_assign $name * 0,
+                SubAssign -- sub_assign u64,
+                SubAssign -- sub_assign Poly,
+                SubAssign -- sub_assign $name * 0,
+                MulAssign -- mul_assign u64,
+                MulAssign -- mul_assign Poly,
+                MulAssign -- mul_assign $name * 0,
+                DivAssign -- div_assign u64,
+                DivAssign -- div_assign Poly,
+                DivAssign -- div_assign $name * 0
+            }
+        };
     )+};
 }
 
@@ -1355,10 +1514,10 @@ mod tests {
     }
 
     make_ring! {
-        F125 = F125Settings { Z % 5, x^3 = [2, 2] };
-        BadRingSmall = BadSettingsSmall { Z % 6, x^1 = [0] };
-        BadRing = BadSettings { Z % 6, x^2 = [3, 2] };
-        BadPoly = BadPolySettings { Z % 5, x^2 = [4] };
+        F125 = { Z % 5, x^3 = [2, 2] };
+        BadRingSmall = { Z % 6, x^1 = [0] };
+        BadRing = { Z % 6, x^2 = [3, 2] };
+        BadPoly = { Z % 5, x^2 = [4] };
     }
 
     mod field {
