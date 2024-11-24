@@ -1,8 +1,8 @@
-= `finitely` -- Optimized Finite Field Arithmetic
+# `finitely` -- Optimized Finite Field Arithmetic
 
 This crate implements arithmetic on rings of the form `(Z/nZ)[x]/(p(x))` with arbitrary `n` and `p`. It aims to be incredibly performant and feature-rich. 
 
-== Example usage:
+## Example usage:
 ```
 use finitely::make_ring;
 
@@ -24,7 +24,7 @@ assert_eq!(x_plus_one.invert(), Some(x + 4));
 assert_eq!(x_plus_one / x, x * 3 + 1);
 ```
 
-== What _does_ this implement (but for non-mathematicians)?
+## What _does_ this implement (but for non-mathematicians)?
 This crate lets you represent polynomials that look like `a[0] + a[1]x + a[2]x^2 + ... + a[k]x^k`, with equivalences enforced to make it constant-size. Namely, each one of the coefficients `a[i]` is taken modulo `n` (the equivalence here is to say that `n` is equivalent to zero), and that the polynomial `p` is equivalent to zero. 
 
 What does the second equivalence mean? Consider a polynomial that is of this shape: `p(x) = x^m + b[m-1]x^(m-1) + ... + b[2]x^2 + b[1]x + b[0]` (it is important that the coefficient of `x^m` be one). If we declare that `p(x)` is equivalent to zero, then we have essentially said that:
