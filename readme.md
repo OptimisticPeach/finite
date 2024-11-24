@@ -1,13 +1,13 @@
 # `finitely` -- Optimized Finite Field Arithmetic
 
-This crate implements arithmetic on rings of the form `(Z/nZ)[x]/(p(x))` with arbitrary `n` and `p`. It aims to be incredibly performant and feature-rich. 
+This crate implements arithmetic on rings of the form `(Z/nZ)[x]/(p(x))` with arbitrary `n` and `p`. It aims to be performant and feature-rich. 
 
 ## Example usage:
-```text
+```
 use finitely::make_ring;
 
 make_ring! {
-  pub Field25 = FieldSettings { Z % 5, x^2 = [2] };
+  pub Field25 = { Z % 5, x^2 = [2] };
 }
 
 let x = Field25::from_coeffs(&[1, 0]);
