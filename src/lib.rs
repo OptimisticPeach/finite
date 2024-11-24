@@ -64,7 +64,7 @@ pub trait PolySettings<const SIZE: usize, const LOG2: usize>: Sized {
 /// ```
 /// use finitely::make_ring;
 /// make_ring! {
-///     F9 = F9Settings { Z % 3, x^2 = [2] };
+///     F9 = { Z % 3, x^2 = [2] };
 /// }    
 ///
 /// let value = F9::from_coeffs(&[1, 2]);
@@ -1293,6 +1293,13 @@ macro_rules! make_ring {
             }
 
             impl ::std::cmp::Eq for $name {}
+
+            impl<T> ::std::cmp::PartialEq<T> for $name
+            where Poly: PartialEq<T> {
+                fn eq(&self, other: &T) -> bool {
+                    self.0 == *other
+                }
+            }
 
             $crate::forward_op_impl! {
                 @basic: $name:

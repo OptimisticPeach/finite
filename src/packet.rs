@@ -2,6 +2,9 @@
 // Where coefficient is a0 + 2 a1 + 4 a2 + ...
 pub(crate) struct Packet<const LOG2: usize>(pub(crate) [u64; LOG2]);
 
+// #[allow(dead_code)] is added to functions in this module because they may
+// be used later and writing them is a pain.
+
 macro_rules! repeat {
     ($times:ident, $me:ident[$indexing:ident => $idx:expr], $input_val:pat, ($($other:ident : $other_val:pat),*), $op:block) => {{
         let mut $indexing = 0;
@@ -122,6 +125,7 @@ impl<const LOG2: usize> Packet<LOG2> {
         repeat! {LOG2, self, x, (other: y), { x | y }}
     }
 
+    #[allow(dead_code)]
     pub const fn xor_u64(mut self, other: u64) -> Self {
         repeat! {LOG2, self, x, { x ^ other }}
     }
@@ -129,14 +133,17 @@ impl<const LOG2: usize> Packet<LOG2> {
     pub const fn and_u64(mut self, other: u64) -> Self {
         repeat! {LOG2, self, x, { x & other }}
     }
+    #[allow(dead_code)]
     pub const fn or_u64(mut self, other: u64) -> Self {
         repeat! {LOG2, self, x, { x | other }}
     }
 
+    #[allow(dead_code)]
     pub const fn xor_reduce(self) -> u64 {
         reduce! {LOG2, acc, self, x, 0, { acc ^ x }}
     }
 
+    #[allow(dead_code)]
     pub const fn and_reduce(self) -> u64 {
         reduce! {LOG2, acc, self, x, 0, { acc & x }}
     }
@@ -153,6 +160,7 @@ impl<const LOG2: usize> Packet<LOG2> {
         repeat! {LOG2, self, x, { !x }}
     }
 
+    #[allow(dead_code)]
     pub const fn right_shift_horizontal(mut self) -> (Self, u64) {
         let last = self.0[LOG2 - 1];
 
