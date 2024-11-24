@@ -1,6 +1,7 @@
 #![doc = include_str!("../readme.md")]
+#![no_std]
 
-use std::{
+use core::{
     fmt::{Debug, Display, Write},
     marker::PhantomData,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -600,6 +601,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// assert_eq!(value.get_nth_coeff(0), 3);
     /// assert_eq!(value.get_nth_coeff(1), 2);
     /// ```
+    #[must_use = "Since this method is const and cannot take &mut, you must assign it to a new variable."]
     pub const fn set_coeff(mut self, idx: usize, coeff: u64) -> Self {
         if idx >= T::DEGREE {
             return self;
@@ -859,7 +861,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     }
 
     /// Writes a debug version of `self` to `w`.
-    pub fn format_full(self, mut w: impl Write) -> std::fmt::Result {
+    pub fn format_full(self, mut w: impl Write) -> core::fmt::Result {
         for i in (1..T::DEGREE).rev() {
             let coeff = self.get_nth_coeff(i) % T::MODULO as u64;
 
@@ -870,7 +872,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     }
 
     /// Writes a display version of `self` to `w`.
-    pub fn format_filtered(self, mut w: impl Write) -> std::fmt::Result {
+    pub fn format_filtered(self, mut w: impl Write) -> core::fmt::Result {
         if self == Self::ZERO {
             return write!(w, "0");
         }
@@ -915,7 +917,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
     /// Returns an iterator over all members of the field.
     pub fn iter() -> FinitePolyIterator<T, SIZE, LOG2> {
         FinitePolyIterator {
-            coeffs: vec![0; T::DEGREE],
+            coeffs: Some(Self::ZERO),
             _item: PhantomData,
         }
     }
@@ -924,7 +926,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Debug
     for FinitePoly<T, SIZE, LOG2>
 {
-    fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, mut f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.format_full(&mut f)?;
         write!(f, " [")?;
         for val in self.internal[1..].iter().rev() {
@@ -938,7 +940,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Debug
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Display
     for FinitePoly<T, SIZE, LOG2>
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.format_filtered(f)
     }
 }
@@ -1077,7 +1079,7 @@ where
 ///
 /// Created by calling [`FinitePoly::iter`].
 pub struct FinitePolyIterator<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> {
-    coeffs: Vec<u64>,
+    coeffs: Option<FinitePoly<T, SIZE, LOG2>>,
     _item: PhantomData<FinitePoly<T, SIZE, LOG2>>,
 }
 
@@ -1087,22 +1089,20 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Iterator
     type Item = FinitePoly<T, SIZE, LOG2>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.coeffs.len() == 0 {
-            return None;
-        }
+        let coeffs = self.coeffs?;
+        let mut new_coeffs = coeffs;
 
-        let val = Self::Item::from_coeffs(&self.coeffs[..]);
-
-        let mut carry = 1;
         let mut is_zero = true;
 
-        for elem in self.coeffs.iter_mut().rev() {
-            let mut new_val = *elem + carry;
+        for i in 0..T::DEGREE {
+            let elem = new_coeffs.get_nth_coeff(i);
 
-            carry = new_val / T::MODULO as u64;
+            let mut new_val = elem + 1;
+
+            let carry = new_val / T::MODULO as u64;
             new_val -= carry * T::MODULO as u64;
 
-            *elem = new_val;
+            new_coeffs = new_coeffs.set_coeff(i, new_val);
 
             is_zero &= new_val == 0;
 
@@ -1112,10 +1112,12 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Iterator
         }
 
         if is_zero {
-            self.coeffs = vec![];
+            self.coeffs = None;
+        } else {
+            self.coeffs = Some(new_coeffs);
         }
 
-        Some(val)
+        Some(coeffs)
     }
 }
 
@@ -1178,7 +1180,7 @@ macro_rules! forward_op_impl {
         )*
     };
     (@basic_inner: $on:ty ; $name:ident ; $method:ident ; ($op:tt) ; $other:ident $(* $lit:literal)?) => {
-        impl ::std::ops::$name<$other> for $on {
+        impl ::core::ops::$name<$other> for $on {
             type Output = Self;
 
             fn $method(self, other: $other) -> Self {
@@ -1193,7 +1195,7 @@ macro_rules! forward_op_impl {
         )*
     };
     (@assign_inner: $on:ty ; $name:ident ; $method:ident ; $other:ident $(* $lit:literal)?) => {
-        impl ::std::ops::$name<$other> for $on {
+        impl ::core::ops::$name<$other> for $on {
             fn $method(&mut self, other: $other) {
                 self.0.$method($crate::forward_const!(@param: other $(* $lit)?))
             }
@@ -1298,21 +1300,21 @@ macro_rules! make_ring {
                 }
             }
 
-            impl ::std::fmt::Debug for $name {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                    <Poly as ::std::fmt::Debug>::fmt(&self.0, f)
+            impl ::core::fmt::Debug for $name {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    <Poly as ::core::fmt::Debug>::fmt(&self.0, f)
                 }
             }
 
-            impl ::std::fmt::Display for $name {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                    <Poly as ::std::fmt::Display>::fmt(&self.0, f)
+            impl ::core::fmt::Display for $name {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    <Poly as ::core::fmt::Display>::fmt(&self.0, f)
                 }
             }
 
-            impl ::std::cmp::Eq for $name {}
+            impl ::core::cmp::Eq for $name {}
 
-            impl<T> ::std::cmp::PartialEq<T> for $name
+            impl<T> ::core::cmp::PartialEq<T> for $name
             where Poly: PartialEq<T> {
                 fn eq(&self, other: &T) -> bool {
                     self.0 == *other

@@ -1,18 +1,14 @@
+// This file is used for testing and debugging during development.
+
 use std::{hint::black_box, time::Instant};
 
 use finitely::make_ring;
-
-// make_ring! {
-//     F125 = %5 ^3, [2, 2]
-// }
-
-// 144444444
-//
 
 make_ring! {
     /// abc
     pub Nonsense = { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
     Nonsense2 = { Z % 7901, x^7 = [7900, 0, 7896, 0, 7884] };
+    pub F25 = { Z % 5, x^5 = [2] };
 }
 
 // make_ring! {
@@ -58,54 +54,58 @@ fn main() {
     //     }
     // }
 
-    let val = Nonsense::from_coeffs(&[1, 2, 3, 4, 5]);
-    let inverse = val.invert().unwrap();
-
-    println!("{val}");
-    println!("{:?}", inverse);
-    println!("{}", val * inverse);
-
-    let mut avg_time_ms = 0.0f64;
-
-    for _ in 0..20 {
-        let start = Instant::now();
-
-        for _ in 0..100_000 {
-            let inverse = black_box(val).invert().unwrap();
-            black_box(inverse);
-        }
-
-        let elapsed = start.elapsed();
-
-        println!("{elapsed:?}");
-        avg_time_ms += elapsed.as_secs_f64() * 1000.0;
+    for x in F25::iter() {
+        println!("{x}");
     }
 
-    println!(
-        "Average time to divide: {}ms",
-        avg_time_ms / (20.0 * 100000.0)
-    );
+    // let val = Nonsense::from_coeffs(&[1, 2, 3, 4, 5]);
+    // let inverse = val.invert().unwrap();
 
-    let mut avg_time_ms = 0.0f64;
+    // println!("{val}");
+    // println!("{:?}", inverse);
+    // println!("{}", val * inverse);
 
-    for _ in 0..20 {
-        let start = Instant::now();
+    // let mut avg_time_ms = 0.0f64;
 
-        for _ in 0..100_000 {
-            let inverse = black_box(inverse).invert().unwrap();
-            black_box(inverse);
-        }
+    // for _ in 0..20 {
+    //     let start = Instant::now();
 
-        let elapsed = start.elapsed();
+    //     for _ in 0..100_000 {
+    //         let inverse = black_box(val).invert().unwrap();
+    //         black_box(inverse);
+    //     }
 
-        println!("{elapsed:?}");
-        avg_time_ms += elapsed.as_secs_f64() * 1000.0;
-    }
+    //     let elapsed = start.elapsed();
 
-    println!(
-        "Average time to divide: {}ms",
-        avg_time_ms / (20.0 * 100000.0)
-    );
+    //     println!("{elapsed:?}");
+    //     avg_time_ms += elapsed.as_secs_f64() * 1000.0;
+    // }
+
+    // println!(
+    //     "Average time to divide: {}ms",
+    //     avg_time_ms / (20.0 * 100000.0)
+    // );
+
+    // let mut avg_time_ms = 0.0f64;
+
+    // for _ in 0..20 {
+    //     let start = Instant::now();
+
+    //     for _ in 0..100_000 {
+    //         let inverse = black_box(inverse).invert().unwrap();
+    //         black_box(inverse);
+    //     }
+
+    //     let elapsed = start.elapsed();
+
+    //     println!("{elapsed:?}");
+    //     avg_time_ms += elapsed.as_secs_f64() * 1000.0;
+    // }
+
+    // println!(
+    //     "Average time to divide: {}ms",
+    //     avg_time_ms / (20.0 * 100000.0)
+    // );
 
     // println!(
     //     "{val} has:\ninverse: {inverse}\nproduct is {}",

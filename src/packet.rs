@@ -258,8 +258,8 @@ impl<const LOG2: usize> Packet<LOG2> {
     }
 }
 
-impl<const LOG2: usize> std::fmt::Display for Packet<LOG2> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<const LOG2: usize> core::fmt::Display for Packet<LOG2> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", &self.0[..])
     }
 }
