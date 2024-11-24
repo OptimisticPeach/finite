@@ -3,7 +3,7 @@
 This crate implements arithmetic on rings of the form `(Z/nZ)[x]/(p(x))` with arbitrary `n` and `p`. It aims to be performant and feature-rich. 
 
 ## Example usage:
-```
+```rs
 use finitely::make_ring;
 
 make_ring! {
