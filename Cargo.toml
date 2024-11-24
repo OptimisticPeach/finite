@@ -8,7 +8,7 @@ repository = "https://github.com/OptimisticPeach/finitely"
 readme = "readme.md"
 license = "MIT OR Apache-2.0"
 keywords = ["math", "finite", "field", "ring", "integer"]
-categories = ["algorithms", "data-structures", "mathematics"]
+categories = ["algorithms", "data-structures", "mathematics", "no_std"]
 rust-version = "1.84.0"
 
 [dependencies]
