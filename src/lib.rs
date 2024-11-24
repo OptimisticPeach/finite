@@ -1201,6 +1201,22 @@ macro_rules! forward_op_impl {
     };
 }
 
+/// Creates a newtype with the necessary trait forwards for ease-of-use.
+///
+/// Example usage:
+/// ```
+/// use finitely::make_ring;
+///
+/// make_ring! {
+///     // Attributes are supported:
+///
+///     #[allow(dead_code)]
+///     /// The field with 25 elements.
+///     pub(crate) F25 = { Z % 5, x^2 = [3] };
+///
+///     WeirdRing = { Z % 3500, x^5 = [12, 3, 4, 56] };
+/// }
+/// ```
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! make_ring {
