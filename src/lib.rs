@@ -616,7 +616,7 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         let u64_idx = coeff / 64;
         let within_u64_idx = coeff % 64;
 
-        self.internal[u64_idx].extract_coefficient(within_u64_idx)
+        self.internal[u64_idx].extract_coefficient(within_u64_idx) % T::MODULO
     }
 
     /// Sets a coefficient in the polynomial.
@@ -995,6 +995,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Mul<u64>
     }
 }
 
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize>
+    Mul<FinitePoly<T, SIZE, LOG2>> for u64
+{
+    type Output = FinitePoly<T, SIZE, LOG2>;
+
+    fn mul(self, rhs: FinitePoly<T, SIZE, LOG2>) -> FinitePoly<T, SIZE, LOG2> {
+        rhs * self
+    }
+}
+
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Div<Self>
     for FinitePoly<T, SIZE, LOG2>
 {
@@ -1002,6 +1012,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Div<Self
 
     fn div(self, rhs: Self) -> Self {
         self * rhs.invert().unwrap()
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize>
+    Div<FinitePoly<T, SIZE, LOG2>> for u64
+{
+    type Output = FinitePoly<T, SIZE, LOG2>;
+
+    fn div(self, rhs: FinitePoly<T, SIZE, LOG2>) -> FinitePoly<T, SIZE, LOG2> {
+        rhs * self
     }
 }
 
@@ -1035,6 +1055,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Add<u64>
     }
 }
 
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize>
+    Add<FinitePoly<T, SIZE, LOG2>> for u64
+{
+    type Output = FinitePoly<T, SIZE, LOG2>;
+
+    fn add(self, rhs: FinitePoly<T, SIZE, LOG2>) -> FinitePoly<T, SIZE, LOG2> {
+        rhs + self
+    }
+}
+
 impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Neg
     for FinitePoly<T, SIZE, LOG2>
 {
@@ -1062,6 +1092,16 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> Sub<u64>
 
     fn sub(self, rhs: u64) -> Self {
         self.sub(Self::from_int(rhs))
+    }
+}
+
+impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize>
+    Sub<FinitePoly<T, SIZE, LOG2>> for u64
+{
+    type Output = FinitePoly<T, SIZE, LOG2>;
+
+    fn sub(self, rhs: FinitePoly<T, SIZE, LOG2>) -> FinitePoly<T, SIZE, LOG2> {
+        rhs - self
     }
 }
 
@@ -1219,6 +1259,21 @@ macro_rules! forward_op_impl {
         }
     };
 
+    (@basic_comm: $on:ty: $($name:ident -- $method:ident ($op:tt) $other:ident $(*$lit:literal)?),*) => {
+        $(
+            $crate::forward_op_impl!{@basic_comm_inner: $on ; $name ; $method ; ($op) ; $other $(*$lit)?}
+        )*
+    };
+    (@basic_comm_inner: $on:ty ; $name:ident ; $method:ident ; ($op:tt) ; $other:ident $(* $lit:literal)?) => {
+        impl ::core::ops::$name<$on> for $other {
+            type Output = $on;
+
+            fn $method(self, other: $on) -> $on {
+                other $op self
+            }
+        }
+    };
+
     (@assign: $on:ty: $($name:ident -- $method:ident $other:ident $(*$lit:literal)?),*) => {
         $(
             $crate::forward_op_impl!{@assign_inner: $on ; $name ; $method ; $other $(*$lit)?}
@@ -1366,6 +1421,18 @@ macro_rules! make_ring {
                 Div -- div (/) u64,
                 Div -- div (/) Poly,
                 Div -- div (/) $name * 0
+            }
+
+            $crate::forward_op_impl! {
+                @basic_comm: $name:
+                Add -- add (+) u64,
+                Add -- add (+) Poly,
+                Sub -- sub (-) u64,
+                Sub -- sub (-) Poly,
+                Mul -- mul (*) u64,
+                Mul -- mul (*) Poly,
+                Div -- div (/) u64,
+                Div -- div (/) Poly
             }
 
             $crate::forward_op_impl! {
