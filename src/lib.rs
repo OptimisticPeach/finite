@@ -566,6 +566,36 @@ impl<T: PolySettings<SIZE, LOG2>, const SIZE: usize, const LOG2: usize> FinitePo
         self
     }
 
+    /// Divides `self` by `x` without doing over/underflow.
+    ///
+    /// This runs in *`O(LOG2 * SIZE)`*.
+    ///
+    /// Example usage:
+    /// ```
+    /// # use finitely::make_ring;
+    /// # make_ring! { F25 = { Z % 5, x^2 = [1, 3] }; }
+    /// let x_plus_2 = F25::from_coeffs(&[1, 2]);
+    /// assert_eq!(x_plus_2.unchecked_divx(1), 1);
+    /// ```
+    pub const fn unchecked_divx(mut self, power: usize) -> Self {
+        if power == 0 {
+            return self;
+        }
+        let mut done = SIZE;
+
+        let mut carry = Packet::new();
+
+        while done != 0 {
+            let new_carry = self.internal[done].lsh(64 - power);
+            self.internal[done] = self.internal[done].rsh(power).or(carry);
+
+            carry = new_carry;
+            done -= 1;
+        }
+
+        self
+    }
+
     /// Acquires the nth coefficient of the polynomial.
     ///
     /// This runs in *`O(LOG2)`*.
@@ -1259,6 +1289,7 @@ macro_rules! make_ring {
                 fn mul_modulo(self*0, by: u64) -> Self;
                 fn mul_x(self*0) -> Self;
                 fn unchecked_mulx(self*0, power: usize) -> Self;
+                fn unchecked_divx(self*0, power: usize) -> Self;
                 fn get_nth_coeff(self*0, coeff: usize) -> u64;
                 fn set_coeff(self*0, idx: usize, coeff: u64) -> Self;
                 fn invert(self*0) -> Option<Self>;
